@@ -1,0 +1,10 @@
+[project]
+name = "searcher"
+version = "0.1.0"
+description = "CLI-помощник по консольным командам macOS через локальный API LM Studio"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+searcher = "main:main"
