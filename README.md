@@ -148,3 +148,12 @@ searcher --<TAB>
 
 - Если API на `http://127.0.0.1:1234` недоступен, утилита завершится с ошибкой и попросит запустить сервер LM Studio.
 - Если сервер запущен, но не загружена модель, утилита сообщит об этом и завершится.
+
+## Архитектурные решения
+
+Все принятые проектные решения фиксируются в `docs/PROP-*`:
+
+- `docs/PROP-001-modular-architecture.md`
+- `docs/PROP-002-dynamic-capabilities.md`
+- `docs/PROP-003-command-policy.md`
+- `docs/PROP-004-cli-ux.md`

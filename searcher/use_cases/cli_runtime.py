@@ -1,0 +1,53 @@
+"""CLI orchestration use case."""
+
+import sys
+
+from searcher.core.command_policy import coerce_command
+from searcher.core.completion import zsh_completion_script
+from searcher.core.execution import confirm_output, execute_command
+from searcher.core.tooling import build_capabilities
+from searcher.models.contracts import CliOptions
+from searcher.use_cases.assistant import generate_answer, get_model_id, repair_command
+
+
+def run_cli(options: CliOptions) -> int:
+    """Execute full CLI flow from validated options."""
+    if options["print_zsh_completion"]:
+        print(zsh_completion_script(), end="")
+        return 0
+    query = options["query"].strip()
+    if not query:
+        print("Запрос не должен быть пустым.", file=sys.stderr)
+        return 1
+    try:
+        capabilities = build_capabilities()
+        model_id = get_model_id()
+        result = generate_answer(
+            query=query,
+            model_id=model_id,
+            reasoning=options["reasoning"],
+            capabilities=capabilities,
+            tool_policy=options["tool_policy"],
+        )
+        if not options["reasoning"]:
+            result = coerce_command(
+                query=query,
+                model_id=model_id,
+                draft=result,
+                capabilities=capabilities,
+                tool_policy=options["tool_policy"],
+                repair_command_fn=repair_command,
+            )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if options["reasoning"]:
+        print("\nПредложенный ответ:\n")
+        print(result)
+        return 0
+    print(result)
+    if not confirm_output():
+        return 1
+    if options["dry_run"]:
+        return 0
+    return execute_command(result)
