@@ -14,6 +14,7 @@ from searcher.models.contracts import (
     ModelItem,
     ModelsResponse,
     ToolPolicy,
+    ValidationResult,
 )
 
 
@@ -183,3 +184,48 @@ def repair_command(
         "POST", f"{BASE_URL}{CHAT_PATH}", payload=payload, timeout=20.0
     )
     return _extract_content(_parse_chat_response(response))
+
+
+def _parse_validation_text(text: str) -> ValidationResult:
+    """Parse validator response to typed ValidationResult."""
+    normalized = text.strip()
+    if normalized == "VALID":
+        return {"is_valid": True, "reason": ""}
+    if normalized.startswith("INVALID:"):
+        reason = normalized.removeprefix("INVALID:").strip()
+        return {"is_valid": False, "reason": reason}
+    return {"is_valid": False, "reason": "Валидатор вернул неожиданный формат ответа."}
+
+
+def validate_terminal_command(
+    *,
+    query: str,
+    command: str,
+    model_id: str,
+    capabilities: Capabilities,
+    tool_policy: ToolPolicy,
+) -> ValidationResult:
+    """Validate command with an additional LLM request."""
+    messages: list[ChatMessage] = [
+        {
+            "role": "system",
+            "content": (
+                "You validate shell commands for macOS terminal usage. "
+                "Respond with exactly one line in one of two formats: "
+                "VALID or INVALID: <reason>.\n\n"
+                f"{format_capabilities_block(capabilities, tool_policy)}"
+            ),
+        },
+        {"role": "user", "content": f"User request: {query}\nCommand: {command}"},
+    ]
+    payload: dict[str, object] = {
+        "model": model_id,
+        "messages": messages,
+        "temperature": 0.0,
+        "max_tokens": 40,
+    }
+    response = request_json(
+        "POST", f"{BASE_URL}{CHAT_PATH}", payload=payload, timeout=20.0
+    )
+    raw = _extract_content(_parse_chat_response(response))
+    return _parse_validation_text(raw)

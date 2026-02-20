@@ -143,6 +143,7 @@ class ToolingAndPromptTests(unittest.TestCase):
         self.assertIn("--reasoning", script)
         self.assertIn("--prefer-modern", script)
         self.assertIn("--strict-modern", script)
+        self.assertIn("--llm-validate", script)
         self.assertIn("--print-zsh-completion", script)
 
 
@@ -277,6 +278,36 @@ class CliFlowTests(unittest.TestCase):
                 exit_code = cli.main(["--strict-modern", "todo"])
         self.assertEqual(exit_code, 1)
         self.assertEqual(coerce_mock.call_args.kwargs["tool_policy"], "strict")
+
+    def test_main_llm_validate_calls_validator(self) -> None:
+        """Run additional validator when llm validation is enabled."""
+        with (
+            patch(
+                "searcher.use_cases.cli_runtime.build_capabilities",
+                return_value=make_capabilities({}),
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.get_model_id",
+                return_value="local-model",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.generate_answer",
+                return_value="rg TODO .",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.coerce_command",
+                return_value="rg TODO .",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.validate_terminal_command",
+                return_value={"is_valid": True, "reason": ""},
+            ) as validate_mock,
+            patch("builtins.input", return_value="n"),
+        ):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                exit_code = cli.main(["--llm-validate", "todo"])
+        self.assertEqual(exit_code, 1)
+        validate_mock.assert_called()
 
     def test_main_reasoning_mode_skips_command_coercion(self) -> None:
         """Do not coerce command in reasoning mode."""

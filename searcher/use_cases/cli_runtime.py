@@ -8,6 +8,7 @@ from searcher.core.execution import confirm_output, execute_command
 from searcher.core.tooling import build_capabilities
 from searcher.models.contracts import CliOptions
 from searcher.use_cases.assistant import generate_answer, get_model_id, repair_command
+from searcher.use_cases.assistant import validate_terminal_command
 
 
 def run_cli(options: CliOptions) -> int:
@@ -38,6 +39,42 @@ def run_cli(options: CliOptions) -> int:
                 tool_policy=options["tool_policy"],
                 repair_command_fn=repair_command,
             )
+            if options["llm_validate"]:
+                validation = validate_terminal_command(
+                    query=query,
+                    command=result,
+                    model_id=model_id,
+                    capabilities=capabilities,
+                    tool_policy=options["tool_policy"],
+                )
+                if not validation["is_valid"]:
+                    repaired = repair_command(
+                        query=query,
+                        model_id=model_id,
+                        capabilities=capabilities,
+                        tool_policy=options["tool_policy"],
+                        reason=f"llm validation failed: {validation['reason']}",
+                    )
+                    result = coerce_command(
+                        query=query,
+                        model_id=model_id,
+                        draft=repaired,
+                        capabilities=capabilities,
+                        tool_policy=options["tool_policy"],
+                        repair_command_fn=repair_command,
+                    )
+                    validation = validate_terminal_command(
+                        query=query,
+                        command=result,
+                        model_id=model_id,
+                        capabilities=capabilities,
+                        tool_policy=options["tool_policy"],
+                    )
+                    if not validation["is_valid"]:
+                        raise RuntimeError(
+                            "LLM-валидация не подтвердила команду: "
+                            f"{validation['reason'] or 'неизвестная причина'}"
+                        )
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 1

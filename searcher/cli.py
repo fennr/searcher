@@ -34,6 +34,11 @@ def parse_args(argv: list[str]) -> CliOptions:
         action="store_true",
         help="Не выполнять команду после подтверждения, только показать её.",
     )
+    parser.add_argument(
+        "--llm-validate",
+        action="store_true",
+        help="Дополнительно валидировать команду через модель перед выполнением.",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--prefer-modern",
@@ -61,6 +66,7 @@ def parse_args(argv: list[str]) -> CliOptions:
         "query": " ".join(query_parts).strip(),
         "reasoning": bool(namespace.reasoning),
         "dry_run": bool(namespace.dry_run),
+        "llm_validate": bool(namespace.llm_validate),
         "tool_policy": _to_tool_policy(str(namespace.tool_policy)),
         "print_zsh_completion": bool(namespace.print_zsh_completion),
     }

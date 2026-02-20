@@ -22,6 +22,7 @@ class CliOptions(TypedDict):
     query: str
     reasoning: bool
     dry_run: bool
+    llm_validate: bool
     tool_policy: ToolPolicy
     print_zsh_completion: bool
 
@@ -61,3 +62,10 @@ class ChatCompletionsResponse(TypedDict, total=False):
     """Response shape for /v1/chat/completions."""
 
     choices: list[ChoiceItem]
+
+
+class ValidationResult(TypedDict):
+    """Validation result returned by command validation use case."""
+
+    is_valid: bool
+    reason: str

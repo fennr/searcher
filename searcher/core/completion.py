@@ -10,6 +10,7 @@ _searcher() {
     '(-r --reasoning)'{-r,--reasoning}'[Режим рассуждения: текстовый ответ без выполнения команды]' \\
     '--prefer-modern[Приоритет modern-утилит с fallback на стандартные]' \\
     '--strict-modern[Строгий modern-режим без fallback на baseline]' \\
+    '--llm-validate[Дополнительная LLM-валидация команды перед выполнением]' \\
     '--dry-run[Показать команду без выполнения]' \\
     '--print-zsh-completion[Печать zsh completion-скрипта]' \\
     '*:query:_message "текст запроса"'
