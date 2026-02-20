@@ -42,13 +42,24 @@ def looks_like_command(text: str) -> bool:
     """Check if text resembles a shell command."""
     if not text:
         return False
-    if re.search(r"[А-Яа-яЁё]", text):
+    if any(ord(ch) < 32 for ch in text):
         return False
-    if not text.isascii():
+    tool = extract_first_tool(text)
+    if tool is None:
         return False
-    if re.match(r"^[ -~]+$", text) is None:
+    return re.search(r"[A-Za-z0-9]", tool) is not None
+
+
+def has_minimum_usefulness(command: str) -> bool:
+    """Check that command is not a bare known utility without arguments."""
+    stripped = command.strip()
+    if " " in stripped or "\t" in stripped:
+        return True
+    tool = extract_first_tool(stripped)
+    if tool is None:
         return False
-    return re.search(r"[A-Za-z0-9]", text) is not None
+    known_tools = set((*MODERN_TOOLS, *BASELINE_TOOLS))
+    return tool not in known_tools
 
 
 def extract_first_tool(command: str) -> str | None:
@@ -139,6 +150,16 @@ def coerce_command(
             capabilities=capabilities,
             tool_policy=tool_policy,
             reason="not a valid single-line shell command",
+            repair_fn=repair_command_fn,
+        )
+    if not has_minimum_usefulness(command):
+        command = _repair_if_needed(
+            query=query,
+            model_id=model_id,
+            command=command,
+            capabilities=capabilities,
+            tool_policy=tool_policy,
+            reason="command is too generic and lacks required arguments",
             repair_fn=repair_command_fn,
         )
     is_ok, reason = check_tool_policy(command, capabilities, tool_policy)

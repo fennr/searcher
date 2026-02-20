@@ -32,7 +32,7 @@ def parse_args(argv: list[str]) -> CliOptions:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Не выполнять команду после подтверждения, только показать её.",
+        help="Не выполнять выбранную команду, только показать её.",
     )
     parser.add_argument(
         "--llm-validate",

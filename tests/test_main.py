@@ -1,16 +1,17 @@
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from searcher import cli
 from searcher.core.command_policy import (
     check_tool_policy,
     coerce_command,
+    has_minimum_usefulness,
     looks_like_command,
 )
 from searcher.core.completion import zsh_completion_script
+from searcher.core.execution import choose_command, extract_commands
 from searcher.core.prompts import build_system_prompt
 from searcher.core.tooling import build_capabilities, detect_tools, reset_tools_cache
 from searcher.models.contracts import Capabilities
@@ -68,6 +69,10 @@ class CommandValidationTests(unittest.TestCase):
     def test_command_with_cyrillic_is_rejected(self) -> None:
         """Reject plain russian text as shell command."""
         self.assertFalse(looks_like_command("показать файлы"))
+
+    def test_command_with_unicode_argument_is_accepted(self) -> None:
+        """Accept command with unicode argument value."""
+        self.assertTrue(looks_like_command('grep -i "требования" README.md'))
 
 
 class ToolingAndPromptTests(unittest.TestCase):
@@ -208,17 +213,50 @@ class PolicyTests(unittest.TestCase):
         )
         self.assertEqual(result, "rg TODO .")
 
+    def test_has_minimum_usefulness_rejects_bare_known_tool(self) -> None:
+        """Reject single-token known utility as non-useful command."""
+        self.assertFalse(has_minimum_usefulness("bat"))
+        self.assertFalse(has_minimum_usefulness("rg"))
+        self.assertTrue(has_minimum_usefulness('rg "needle" .'))
+
+    def test_coerce_command_repairs_bare_tool(self) -> None:
+        """Repair bare tool output into actionable command."""
+        capabilities = make_capabilities(
+            {
+                "bat": True,
+                "rg": True,
+                "fd": True,
+                "eza": False,
+                "dust": False,
+                "zoxide": False,
+                "cat": True,
+                "grep": True,
+                "find": True,
+                "ls": True,
+                "du": True,
+                "awk": True,
+                "sed": True,
+                "head": True,
+                "tail": True,
+                "sort": True,
+            }
+        )
+        result = coerce_command(
+            query="Найти py файл с текстом Требования",
+            model_id="model",
+            draft="bat",
+            capabilities=capabilities,
+            tool_policy="prefer",
+            repair_command_fn=lambda **_: 'rg -l "Requirements" -g "*.py" .',
+        )
+        self.assertEqual(result, 'rg -l "Requirements" -g "*.py" .')
+
 
 class CliFlowTests(unittest.TestCase):
     """Validate user-facing CLI flow."""
 
-    def test_main_normal_mode_executes_command_after_confirmation(self) -> None:
-        """Run command after positive confirmation."""
-        prompt_calls: list[str] = []
-
-        def fake_input(prompt: str = "") -> str:
-            prompt_calls.append(prompt)
-            return "y"
+    def test_main_normal_mode_executes_selected_command(self) -> None:
+        """Execute selected command from numbered list."""
 
         with (
             patch(
@@ -231,26 +269,32 @@ class CliFlowTests(unittest.TestCase):
             ),
             patch(
                 "searcher.use_cases.cli_runtime.generate_answer",
-                return_value='grep -R "TODO" .',
+                return_value="1) rg -n TODO .\n2) fd TODO .",
             ),
+            patch(
+                "searcher.use_cases.cli_runtime.extract_commands",
+                return_value=["rg -n TODO .", "fd TODO ."],
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.choose_command",
+                return_value="rg -n TODO .",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.execute_command",
+                return_value=0,
+            ) as execute_mock,
             patch(
                 "searcher.use_cases.cli_runtime.coerce_command",
-                return_value='grep -R "TODO" .',
-            ),
-            patch("builtins.input", side_effect=fake_input),
-            patch(
-                "searcher.core.execution.subprocess.run",
-                return_value=SimpleNamespace(returncode=0),
-            ) as run_mock,
+                return_value="rg -n TODO .",
+            ) as coerce_mock,
         ):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 exit_code = cli.main(["как найти todo"])
         self.assertEqual(exit_code, 0)
-        self.assertIn('grep -R "TODO" .', stdout.getvalue())
-        run_mock.assert_called_once_with('grep -R "TODO" .', shell=True)
-        self.assertEqual(prompt_calls, ["[y/N]: "])
+        execute_mock.assert_called_once_with("rg -n TODO .")
+        self.assertEqual(coerce_mock.call_args.kwargs["draft"], "rg -n TODO .")
         self.assertEqual(stderr.getvalue(), "")
 
     def test_main_strict_modern_passes_policy_to_coerce(self) -> None:
@@ -266,17 +310,25 @@ class CliFlowTests(unittest.TestCase):
             ),
             patch(
                 "searcher.use_cases.cli_runtime.generate_answer",
+                return_value="1) rg TODO .",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.extract_commands",
+                return_value=["rg TODO ."],
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.choose_command",
                 return_value="rg TODO .",
             ),
             patch(
                 "searcher.use_cases.cli_runtime.coerce_command",
                 return_value="rg TODO .",
             ) as coerce_mock,
-            patch("builtins.input", return_value="n"),
+            patch("searcher.use_cases.cli_runtime.execute_command", return_value=0),
         ):
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 exit_code = cli.main(["--strict-modern", "todo"])
-        self.assertEqual(exit_code, 1)
+        self.assertEqual(exit_code, 0)
         self.assertEqual(coerce_mock.call_args.kwargs["tool_policy"], "strict")
 
     def test_main_llm_validate_calls_validator(self) -> None:
@@ -292,6 +344,14 @@ class CliFlowTests(unittest.TestCase):
             ),
             patch(
                 "searcher.use_cases.cli_runtime.generate_answer",
+                return_value="1) rg TODO .",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.extract_commands",
+                return_value=["rg TODO ."],
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.choose_command",
                 return_value="rg TODO .",
             ),
             patch(
@@ -302,11 +362,11 @@ class CliFlowTests(unittest.TestCase):
                 "searcher.use_cases.cli_runtime.validate_terminal_command",
                 return_value={"is_valid": True, "reason": ""},
             ) as validate_mock,
-            patch("builtins.input", return_value="n"),
+            patch("searcher.use_cases.cli_runtime.execute_command", return_value=0),
         ):
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 exit_code = cli.main(["--llm-validate", "todo"])
-        self.assertEqual(exit_code, 1)
+        self.assertEqual(exit_code, 0)
         validate_mock.assert_called()
 
     def test_main_reasoning_mode_skips_command_coercion(self) -> None:
@@ -337,13 +397,8 @@ class CliFlowTests(unittest.TestCase):
         input_mock.assert_not_called()
         self.assertEqual(stderr.getvalue(), "")
 
-    def test_main_dry_run_does_not_execute_command(self) -> None:
-        """Skip execution when dry-run is enabled."""
-        prompt_calls: list[str] = []
-
-        def fake_input(prompt: str = "") -> str:
-            prompt_calls.append(prompt)
-            return "y"
+    def test_main_dry_run_prints_and_does_not_execute(self) -> None:
+        """Skip command execution when dry-run is enabled."""
 
         with (
             patch(
@@ -356,14 +411,23 @@ class CliFlowTests(unittest.TestCase):
             ),
             patch(
                 "searcher.use_cases.cli_runtime.generate_answer",
+                return_value="1) tail -n 50 app.log",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.extract_commands",
+                return_value=["tail -n 50 app.log"],
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.choose_command",
                 return_value="tail -n 50 app.log",
             ),
             patch(
                 "searcher.use_cases.cli_runtime.coerce_command",
                 return_value="tail -n 50 app.log",
             ),
-            patch("builtins.input", side_effect=fake_input),
-            patch("searcher.core.execution.subprocess.run") as run_mock,
+            patch(
+                "searcher.use_cases.cli_runtime.execute_command"
+            ) as execute_mock,
         ):
             stdout = io.StringIO()
             stderr = io.StringIO()
@@ -371,9 +435,32 @@ class CliFlowTests(unittest.TestCase):
                 exit_code = cli.main(["--dry-run", "показать последние логи"])
         self.assertEqual(exit_code, 0)
         self.assertIn("tail -n 50 app.log", stdout.getvalue())
-        self.assertEqual(prompt_calls, ["[y/N]: "])
-        run_mock.assert_not_called()
+        execute_mock.assert_not_called()
         self.assertEqual(stderr.getvalue(), "")
+
+    def test_main_returns_error_when_no_commands_extracted(self) -> None:
+        """Fail gracefully when reasoning answer has no command lines."""
+        with (
+            patch(
+                "searcher.use_cases.cli_runtime.build_capabilities",
+                return_value=make_capabilities({}),
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.get_model_id",
+                return_value="local-model",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.generate_answer",
+                return_value="Попробуйте проверить README и логи.",
+            ),
+            patch("searcher.use_cases.cli_runtime.extract_commands", return_value=[]),
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(["как найти configs"])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Не удалось извлечь подходящие команды", stderr.getvalue())
 
     def test_main_returns_error_when_api_unavailable(self) -> None:
         """Print runtime error from API layer."""
@@ -409,6 +496,37 @@ class CliFlowTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), "")
         get_model_mock.assert_not_called()
         generate_mock.assert_not_called()
+
+
+class ExecutionTests(unittest.TestCase):
+    """Validate command extraction and interactive selection."""
+
+    def test_extract_commands_reads_only_bash_fences(self) -> None:
+        """Extract shell commands only from fenced bash blocks."""
+        answer = (
+            "Сделайте так:\n"
+            "```bash\n"
+            "ls -l ~/configs\n"
+            "rg -n configs .\n"
+            "```\n"
+            "И еще можно `find . -name \"*.py\"`.\n"
+            "```text\n"
+            "cat README.md\n"
+            "```"
+        )
+        self.assertEqual(extract_commands(answer), ["ls -l ~/configs", "rg -n configs ."])
+
+    def test_choose_command_returns_selected_item(self) -> None:
+        """Return selected command by number."""
+        with patch("builtins.input", return_value="2"):
+            selected = choose_command(["ls -la", "rg TODO ."])
+        self.assertEqual(selected, "rg TODO .")
+
+    def test_choose_command_empty_input_cancels(self) -> None:
+        """Cancel selection when user presses Enter."""
+        with patch("builtins.input", return_value=""):
+            selected = choose_command(["ls -la", "rg TODO ."])
+        self.assertIsNone(selected)
 
 
 if __name__ == "__main__":
