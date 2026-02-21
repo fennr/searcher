@@ -162,6 +162,10 @@ class ToolingAndPromptTests(unittest.TestCase):
         self.assertIn("Available domain dev tools: docker, git", prompt)
         self.assertIn("Environment: OS=Darwin; shell=zsh", prompt)
         self.assertIn("Policy: Prefer modern tools", prompt)
+        reasoning_prompt = build_system_prompt(
+            reasoning=True, capabilities=capabilities, tool_policy="prefer"
+        )
+        self.assertIn("в приоритете `rg`, иначе `grep`", reasoning_prompt)
 
     def test_zsh_completion_contains_flags(self) -> None:
         """Expose CLI flags in completion script."""
