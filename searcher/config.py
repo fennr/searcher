@@ -15,6 +15,43 @@ BASELINE_TOOLS = (
     "tail",
     "sort",
 )
+DEV_TOOLS = (
+    # Rust
+    "cargo",
+    "rustc",
+    "rustup",
+    "cargo-clippy",
+    "cargo-nextest",
+    "cargo-watch",
+    "cargo-audit",
+    "rustfmt",
+    # Python
+    "python3",
+    "pip",
+    "uv",
+    "poetry",
+    "pytest",
+    "ruff",
+    "mypy",
+    "black",
+    # Go
+    "go",
+    "gofmt",
+    "golangci-lint",
+    "dlv",
+    # Common dev/devops
+    "docker",
+    "git",
+    "systemctl",
+    "journalctl",
+    "kubectl",
+    "npm",
+    "yarn",
+    "pnpm",
+    "make",
+    "ssh",
+    "curl",
+)
 PREFERRED_TOOL_MAP = {
     "cat": "bat",
     "grep": "rg",

@@ -10,6 +10,7 @@
 - Флаг `--dry-run`: в `--short` не выполнять выбранную команду, только показать её.
 - Флаг `--llm-validate`: дополнительная валидация команды отдельным запросом к модели.
 - Динамический учёт доступных CLI-утилит в системе (modern + fallback).
+- Динамический учёт популярных dev/devops-инструментов (`docker`, `git`, `systemctl`, `journalctl`, `kubectl`, `npm`, и др.).
 - Режим `--strict-modern` для строгого использования modern-утилит.
 - Без внешних Python-зависимостей (только стандартная библиотека).
 
@@ -129,6 +130,7 @@ searcher --print-zsh-completion
 ### Логика выбора утилит
 
 - Утилита проверяет, какие команды реально доступны в `PATH`.
+- Для доменных запросов (Docker/Git/systemd/Kubernetes/Node.js) модель ориентируется на соответствующие рабочие инструменты, если они доступны.
 - Для известных пар применяется приоритет modern → fallback:
   - `cat -> bat`
   - `grep -> rg`
@@ -182,3 +184,4 @@ searcher --<TAB>
 - `docs/PROP-009-numbered-command-selection.md`
 - `docs/PROP-010-markdown-rendering-in-reasoning.md`
 - `docs/PROP-011-default-reasoning-and-short-mode.md`
+- `docs/PROP-012-dev-tools-capabilities.md`

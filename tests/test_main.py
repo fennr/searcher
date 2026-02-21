@@ -41,10 +41,28 @@ def make_capabilities(tools: dict[str, bool]) -> Capabilities:
         )
         if tools.get(name, False)
     ]
+    dev_tools = [
+        name
+        for name in (
+            "docker",
+            "git",
+            "systemctl",
+            "journalctl",
+            "kubectl",
+            "npm",
+            "yarn",
+            "pnpm",
+            "make",
+            "ssh",
+            "curl",
+        )
+        if tools.get(name, False)
+    ]
     return {
         "tools": tools,
         "modern_available": modern,
         "baseline_available": baseline,
+        "dev_tools_available": dev_tools,
         "os_name": "Darwin",
         "shell_name": "zsh",
     }
@@ -98,7 +116,7 @@ class ToolingAndPromptTests(unittest.TestCase):
             patch(
                 "searcher.core.tooling.shutil.which",
                 side_effect=lambda name: (
-                    f"/bin/{name}" if name in {"rg", "cat", "grep"} else None
+                    f"/bin/{name}" if name in {"rg", "cat", "grep", "docker"} else None
                 ),
             ),
             patch("searcher.core.tooling.platform.system", return_value="Darwin"),
@@ -111,6 +129,7 @@ class ToolingAndPromptTests(unittest.TestCase):
         self.assertEqual(capabilities["shell_name"], "zsh")
         self.assertIn("rg", capabilities["modern_available"])
         self.assertIn("cat", capabilities["baseline_available"])
+        self.assertIn("docker", capabilities["dev_tools_available"])
 
     def test_system_prompt_includes_dynamic_capabilities(self) -> None:
         """Embed capabilities in system prompt."""
@@ -132,12 +151,15 @@ class ToolingAndPromptTests(unittest.TestCase):
                 "head": True,
                 "tail": True,
                 "sort": True,
+                "docker": True,
+                "git": True,
             }
         )
         prompt = build_system_prompt(
             reasoning=False, capabilities=capabilities, tool_policy="prefer"
         )
         self.assertIn("Available modern tools: bat, rg", prompt)
+        self.assertIn("Available domain dev tools: docker, git", prompt)
         self.assertIn("Environment: OS=Darwin; shell=zsh", prompt)
         self.assertIn("Policy: Prefer modern tools", prompt)
 

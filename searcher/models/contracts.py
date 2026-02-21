@@ -12,6 +12,7 @@ class Capabilities(TypedDict):
     tools: dict[str, bool]
     modern_available: list[str]
     baseline_available: list[str]
+    dev_tools_available: list[str]
     os_name: str
     shell_name: str
 
