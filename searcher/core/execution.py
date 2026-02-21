@@ -45,12 +45,14 @@ def choose_command(commands: list[str]) -> str | None:
     """Prompt user to choose command index; return None on cancel."""
     if not commands:
         return None
-    print("Выберите команду по номеру (Enter для отмены):")
+    print("Выберите команду по номеру (0 или Enter для отмены):")
     for index, command in enumerate(commands, start=1):
         print(f"{index}. {command}")
     while True:
         raw = input("> ").strip()
         if not raw:
+            return None
+        if raw == "0":
             return None
         if not raw.isdigit():
             print(f"Введите число от 1 до {len(commands)}.")

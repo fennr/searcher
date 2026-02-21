@@ -20,7 +20,7 @@ class CliOptions(TypedDict):
     """CLI options normalized from argparse namespace."""
 
     query: str
-    reasoning: bool
+    short: bool
     dry_run: bool
     llm_validate: bool
     tool_policy: ToolPolicy

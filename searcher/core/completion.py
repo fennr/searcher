@@ -7,7 +7,7 @@ def zsh_completion_script() -> str:
 
 _searcher() {
   _arguments -s \\
-    '(-r --reasoning)'{-r,--reasoning}'[Режим рассуждения: текстовый ответ без выполнения команды]' \\
+    '(-s --short)'{-s,--short}'[Короткий режим: выбрать и выполнить одну из предложенных команд]' \\
     '--prefer-modern[Приоритет modern-утилит с fallback на стандартные]' \\
     '--strict-modern[Строгий modern-режим без fallback на baseline]' \\
     '--llm-validate[Дополнительная LLM-валидация команды перед выполнением]' \\

@@ -146,7 +146,7 @@ class ToolingAndPromptTests(unittest.TestCase):
         script = zsh_completion_script()
         self.assertIn("#compdef searcher", script)
         self.assertIn("--dry-run", script)
-        self.assertIn("--reasoning", script)
+        self.assertIn("--short", script)
         self.assertIn("--prefer-modern", script)
         self.assertIn("--strict-modern", script)
         self.assertIn("--llm-validate", script)
@@ -292,7 +292,7 @@ class CliFlowTests(unittest.TestCase):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
-                exit_code = cli.main(["как найти todo"])
+                exit_code = cli.main(["--short", "как найти todo"])
         self.assertEqual(exit_code, 0)
         execute_mock.assert_called_once_with("rg -n TODO .")
         self.assertEqual(coerce_mock.call_args.kwargs["draft"], "rg -n TODO .")
@@ -328,7 +328,7 @@ class CliFlowTests(unittest.TestCase):
             patch("searcher.use_cases.cli_runtime.execute_command", return_value=0),
         ):
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-                exit_code = cli.main(["--strict-modern", "todo"])
+                exit_code = cli.main(["--short", "--strict-modern", "todo"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(coerce_mock.call_args.kwargs["tool_policy"], "strict")
 
@@ -366,12 +366,12 @@ class CliFlowTests(unittest.TestCase):
             patch("searcher.use_cases.cli_runtime.execute_command", return_value=0),
         ):
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-                exit_code = cli.main(["--llm-validate", "todo"])
+                exit_code = cli.main(["--short", "--llm-validate", "todo"])
         self.assertEqual(exit_code, 0)
         validate_mock.assert_called()
 
-    def test_main_reasoning_mode_skips_command_coercion(self) -> None:
-        """Do not coerce command in reasoning mode."""
+    def test_main_default_mode_skips_command_coercion(self) -> None:
+        """Do not coerce command in default reasoning mode."""
         with (
             patch(
                 "searcher.use_cases.cli_runtime.build_capabilities",
@@ -392,7 +392,7 @@ class CliFlowTests(unittest.TestCase):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
-                exit_code = cli.main(["-r", "как посмотреть лог"])
+                exit_code = cli.main(["как посмотреть лог"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(stdout.getvalue(), "")
         render_mock.assert_called_once_with(
@@ -437,7 +437,7 @@ class CliFlowTests(unittest.TestCase):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
-                exit_code = cli.main(["--dry-run", "показать последние логи"])
+                exit_code = cli.main(["--short", "--dry-run", "показать последние логи"])
         self.assertEqual(exit_code, 0)
         self.assertIn("tail -n 50 app.log", stdout.getvalue())
         execute_mock.assert_not_called()
@@ -463,7 +463,7 @@ class CliFlowTests(unittest.TestCase):
             stdout = io.StringIO()
             stderr = io.StringIO()
             with redirect_stdout(stdout), redirect_stderr(stderr):
-                exit_code = cli.main(["как найти configs"])
+                exit_code = cli.main(["--short", "как найти configs"])
         self.assertEqual(exit_code, 1)
         self.assertIn("Не удалось извлечь подходящие команды", stderr.getvalue())
 
@@ -530,6 +530,12 @@ class ExecutionTests(unittest.TestCase):
     def test_choose_command_empty_input_cancels(self) -> None:
         """Cancel selection when user presses Enter."""
         with patch("builtins.input", return_value=""):
+            selected = choose_command(["ls -la", "rg TODO ."])
+        self.assertIsNone(selected)
+
+    def test_choose_command_zero_cancels(self) -> None:
+        """Cancel selection when user enters 0."""
+        with patch("builtins.input", return_value="0"):
             selected = choose_command(["ls -la", "rg TODO ."])
         self.assertIsNone(selected)
 

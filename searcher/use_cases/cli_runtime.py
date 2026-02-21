@@ -31,7 +31,7 @@ def run_cli(options: CliOptions) -> int:
             capabilities=capabilities,
             tool_policy=options["tool_policy"],
         )
-        if options["reasoning"]:
+        if not options["short"]:
             render_markdown(result)
             return 0
         candidates = extract_commands(result)

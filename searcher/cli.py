@@ -24,10 +24,10 @@ def parse_args(argv: list[str]) -> CliOptions:
         "query", nargs="*", help="Текст запроса, например: как найти большой файл"
     )
     parser.add_argument(
-        "-r",
-        "--reasoning",
+        "-s",
+        "--short",
         action="store_true",
-        help="Режим пояснений: вывести свободный текст и несколько возможных команд.",
+        help="Короткий командный режим: выбрать и выполнить одну из предложенных команд.",
     )
     parser.add_argument(
         "--dry-run",
@@ -64,7 +64,7 @@ def parse_args(argv: list[str]) -> CliOptions:
     query_parts = list(namespace.query) if isinstance(namespace.query, list) else []
     return {
         "query": " ".join(query_parts).strip(),
-        "reasoning": bool(namespace.reasoning),
+        "short": bool(namespace.short),
         "dry_run": bool(namespace.dry_run),
         "llm_validate": bool(namespace.llm_validate),
         "tool_policy": _to_tool_policy(str(namespace.tool_policy)),
