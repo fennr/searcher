@@ -5,6 +5,7 @@ import sys
 from searcher.core.command_policy import coerce_command
 from searcher.core.completion import zsh_completion_script
 from searcher.core.execution import choose_command, execute_command, extract_commands
+from searcher.core.execution import render_markdown
 from searcher.core.tooling import build_capabilities
 from searcher.models.contracts import CliOptions
 from searcher.use_cases.assistant import generate_answer, get_model_id, repair_command
@@ -31,8 +32,7 @@ def run_cli(options: CliOptions) -> int:
             tool_policy=options["tool_policy"],
         )
         if options["reasoning"]:
-            print("\nПредложенный ответ:\n")
-            print(result)
+            render_markdown(result)
             return 0
         candidates = extract_commands(result)
         if not candidates:

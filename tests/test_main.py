@@ -11,7 +11,8 @@ from searcher.core.command_policy import (
     looks_like_command,
 )
 from searcher.core.completion import zsh_completion_script
-from searcher.core.execution import choose_command, extract_commands
+from searcher.core.execution import choose_command, extract_commands, render_markdown
+from searcher.core.execution import render_with_system_cat
 from searcher.core.prompts import build_system_prompt
 from searcher.core.tooling import build_capabilities, detect_tools, reset_tools_cache
 from searcher.models.contracts import Capabilities
@@ -384,6 +385,7 @@ class CliFlowTests(unittest.TestCase):
                 "searcher.use_cases.cli_runtime.generate_answer",
                 return_value="Можно использовать cat и grep для первичной фильтрации.",
             ),
+            patch("searcher.use_cases.cli_runtime.render_markdown") as render_mock,
             patch("searcher.use_cases.cli_runtime.coerce_command") as coerce_mock,
             patch("builtins.input") as input_mock,
         ):
@@ -392,7 +394,10 @@ class CliFlowTests(unittest.TestCase):
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 exit_code = cli.main(["-r", "как посмотреть лог"])
         self.assertEqual(exit_code, 0)
-        self.assertIn("Предложенный ответ:", stdout.getvalue())
+        self.assertEqual(stdout.getvalue(), "")
+        render_mock.assert_called_once_with(
+            "Можно использовать cat и grep для первичной фильтрации."
+        )
         coerce_mock.assert_not_called()
         input_mock.assert_not_called()
         self.assertEqual(stderr.getvalue(), "")
@@ -527,6 +532,40 @@ class ExecutionTests(unittest.TestCase):
         with patch("builtins.input", return_value=""):
             selected = choose_command(["ls -la", "rg TODO ."])
         self.assertIsNone(selected)
+
+    def test_render_with_system_cat_falls_back_to_print(self) -> None:
+        """Fallback to print when `cat` execution fails."""
+        with (
+            patch("searcher.core.execution.subprocess.run", side_effect=OSError),
+            patch("builtins.print") as print_mock,
+        ):
+            render_with_system_cat("пример")
+        print_mock.assert_called_once_with("пример")
+
+    def test_render_markdown_prefers_glow_when_available(self) -> None:
+        """Use glow renderer when it is available."""
+        with (
+            patch(
+                "searcher.core.execution.shutil.which",
+                side_effect=lambda name: "/bin/glow" if name == "glow" else None,
+            ),
+            patch("searcher.core.execution.subprocess.run") as run_mock,
+            patch("searcher.core.execution.render_with_system_cat") as cat_mock,
+        ):
+            run_mock.return_value.returncode = 0
+            render_markdown("# Заголовок")
+        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_args.args[0], ["glow", "-"])
+        cat_mock.assert_not_called()
+
+    def test_render_markdown_falls_back_to_cat_without_renderers(self) -> None:
+        """Fallback to plain cat when markdown renderer is unavailable."""
+        with (
+            patch("searcher.core.execution.shutil.which", return_value=None),
+            patch("searcher.core.execution.render_with_system_cat") as cat_mock,
+        ):
+            render_markdown("**text**")
+        cat_mock.assert_called_once_with("**text**")
 
 
 if __name__ == "__main__":

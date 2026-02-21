@@ -1,6 +1,7 @@
 """Command selection and execution primitives."""
 
 import re
+import shutil
 import subprocess
 
 from searcher.core.command_policy import clean_single_line, has_minimum_usefulness
@@ -58,6 +59,31 @@ def choose_command(commands: list[str]) -> str | None:
         if 1 <= selected <= len(commands):
             return commands[selected - 1]
         print(f"Введите число от 1 до {len(commands)}.")
+
+
+def render_with_system_cat(text: str) -> None:
+    """Render text through system `cat`; fallback to plain print."""
+    payload = text if text.endswith("\n") else f"{text}\n"
+    try:
+        subprocess.run(["cat"], input=payload, text=True, check=False)
+    except OSError:
+        print(text)
+
+
+def render_markdown(text: str) -> None:
+    """Render markdown in terminal when supported tools are available."""
+    payload = text if text.endswith("\n") else f"{text}\n"
+    renderers: list[list[str]] = [["glow", "-"], ["mdcat"]]
+    for command in renderers:
+        if shutil.which(command[0]) is None:
+            continue
+        try:
+            completed = subprocess.run(command, input=payload, text=True, check=False)
+        except OSError:
+            continue
+        if completed.returncode == 0:
+            return
+    render_with_system_cat(text)
 
 
 def execute_command(command: str) -> int:
