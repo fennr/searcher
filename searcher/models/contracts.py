@@ -15,6 +15,9 @@ class Capabilities(TypedDict):
     dev_tools_available: list[str]
     os_name: str
     shell_name: str
+    cwd_path: str
+    cwd_entries: list[str]
+    cwd_entries_truncated: bool
 
 
 class CliOptions(TypedDict):
@@ -22,6 +25,7 @@ class CliOptions(TypedDict):
 
     query: str
     short: bool
+    tools: list[str]
     dry_run: bool
     llm_validate: bool
     tool_policy: ToolPolicy

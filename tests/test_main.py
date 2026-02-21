@@ -65,6 +65,9 @@ def make_capabilities(tools: dict[str, bool]) -> Capabilities:
         "dev_tools_available": dev_tools,
         "os_name": "Darwin",
         "shell_name": "zsh",
+        "cwd_path": "/tmp/project",
+        "cwd_entries": ["README.md", "src", "tests"],
+        "cwd_entries_truncated": False,
     }
 
 
@@ -120,6 +123,11 @@ class ToolingAndPromptTests(unittest.TestCase):
                 ),
             ),
             patch("searcher.core.tooling.platform.system", return_value="Darwin"),
+            patch("searcher.core.tooling.os.getcwd", return_value="/Users/test/proj"),
+            patch(
+                "searcher.core.tooling.os.listdir",
+                return_value=["README.md", "src", "tests"],
+            ),
             patch.dict(
                 "searcher.core.tooling.os.environ", {"SHELL": "/bin/zsh"}, clear=True
             ),
@@ -130,6 +138,9 @@ class ToolingAndPromptTests(unittest.TestCase):
         self.assertIn("rg", capabilities["modern_available"])
         self.assertIn("cat", capabilities["baseline_available"])
         self.assertIn("docker", capabilities["dev_tools_available"])
+        self.assertEqual(capabilities["cwd_path"], "/Users/test/proj")
+        self.assertEqual(capabilities["cwd_entries"], ["README.md", "src", "tests"])
+        self.assertFalse(capabilities["cwd_entries_truncated"])
 
     def test_system_prompt_includes_dynamic_capabilities(self) -> None:
         """Embed capabilities in system prompt."""
@@ -160,12 +171,27 @@ class ToolingAndPromptTests(unittest.TestCase):
         )
         self.assertIn("Available modern tools: bat, rg", prompt)
         self.assertIn("Available domain dev tools: docker, git", prompt)
+        self.assertIn("Current working directory: /tmp/project", prompt)
+        self.assertIn("Working directory entries: README.md, src, tests", prompt)
         self.assertIn("Environment: OS=Darwin; shell=zsh", prompt)
         self.assertIn("Policy: Prefer modern tools", prompt)
         reasoning_prompt = build_system_prompt(
             reasoning=True, capabilities=capabilities, tool_policy="prefer"
         )
         self.assertIn("в приоритете `rg`, иначе `grep`", reasoning_prompt)
+        preferred_prompt = build_system_prompt(
+            reasoning=True,
+            capabilities=capabilities,
+            tool_policy="prefer",
+            preferred_tools=["docker", "git"],
+        )
+        self.assertIn("User preferred tools: docker, git", preferred_prompt)
+        self.assertIn("старайся использовать именно их", preferred_prompt)
+
+    def test_parse_args_parses_tools_list(self) -> None:
+        """Parse --tools as normalized unique list."""
+        options = cli.parse_args(["--tools", "Docker, git,rg,git", "поиск"])
+        self.assertEqual(options["tools"], ["docker", "git", "rg"])
 
     def test_zsh_completion_contains_flags(self) -> None:
         """Expose CLI flags in completion script."""
@@ -173,6 +199,7 @@ class ToolingAndPromptTests(unittest.TestCase):
         self.assertIn("#compdef searcher", script)
         self.assertIn("--dry-run", script)
         self.assertIn("--short", script)
+        self.assertIn("--tools", script)
         self.assertIn("--prefer-modern", script)
         self.assertIn("--strict-modern", script)
         self.assertIn("--llm-validate", script)
@@ -297,7 +324,7 @@ class CliFlowTests(unittest.TestCase):
             patch(
                 "searcher.use_cases.cli_runtime.generate_answer",
                 return_value="1) rg -n TODO .\n2) fd TODO .",
-            ),
+            ) as generate_mock,
             patch(
                 "searcher.use_cases.cli_runtime.extract_commands",
                 return_value=["rg -n TODO .", "fd TODO ."],
@@ -320,9 +347,32 @@ class CliFlowTests(unittest.TestCase):
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 exit_code = cli.main(["--short", "как найти todo"])
         self.assertEqual(exit_code, 0)
+        self.assertEqual(generate_mock.call_args.kwargs["preferred_tools"], [])
         execute_mock.assert_called_once_with("rg -n TODO .")
         self.assertEqual(coerce_mock.call_args.kwargs["draft"], "rg -n TODO .")
         self.assertEqual(stderr.getvalue(), "")
+
+    def test_main_passes_tools_flag_to_model(self) -> None:
+        """Forward --tools preferences into model generation."""
+        with (
+            patch(
+                "searcher.use_cases.cli_runtime.build_capabilities",
+                return_value=make_capabilities({}),
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.get_model_id",
+                return_value="local-model",
+            ),
+            patch(
+                "searcher.use_cases.cli_runtime.generate_answer",
+                return_value="Короткий ответ",
+            ) as generate_mock,
+            patch("searcher.use_cases.cli_runtime.render_markdown"),
+        ):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                exit_code = cli.main(["--tools", "docker,git", "как посмотреть контейнеры"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(generate_mock.call_args.kwargs["preferred_tools"], ["docker", "git"])
 
     def test_main_strict_modern_passes_policy_to_coerce(self) -> None:
         """Forward strict policy to command coercion."""

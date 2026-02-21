@@ -30,6 +30,7 @@ def run_cli(options: CliOptions) -> int:
             reasoning=True,
             capabilities=capabilities,
             tool_policy=options["tool_policy"],
+            preferred_tools=options["tools"],
         )
         if not options["short"]:
             render_markdown(result)
@@ -49,7 +50,9 @@ def run_cli(options: CliOptions) -> int:
             draft=selected,
             capabilities=capabilities,
             tool_policy=options["tool_policy"],
-            repair_command_fn=repair_command,
+            repair_command_fn=lambda **kwargs: repair_command(
+                **kwargs, preferred_tools=options["tools"]
+            ),
         )
         if options["llm_validate"]:
             validation = validate_terminal_command(
@@ -66,6 +69,7 @@ def run_cli(options: CliOptions) -> int:
                     capabilities=capabilities,
                     tool_policy=options["tool_policy"],
                     reason=f"llm validation failed: {validation['reason']}",
+                    preferred_tools=options["tools"],
                 )
                 result = coerce_command(
                     query=query,
@@ -73,7 +77,9 @@ def run_cli(options: CliOptions) -> int:
                     draft=repaired,
                     capabilities=capabilities,
                     tool_policy=options["tool_policy"],
-                    repair_command_fn=repair_command,
+                    repair_command_fn=lambda **kwargs: repair_command(
+                        **kwargs, preferred_tools=options["tools"]
+                    ),
                 )
                 validation = validate_terminal_command(
                     query=query,

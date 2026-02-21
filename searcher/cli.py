@@ -14,6 +14,21 @@ def _to_tool_policy(value: str) -> ToolPolicy:
     return "prefer"
 
 
+def _parse_tools_list(raw: str) -> list[str]:
+    """Parse comma-separated tools list into normalized tokens."""
+    items = [part.strip().lower() for part in raw.split(",")]
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not item:
+            continue
+        if item in seen:
+            continue
+        seen.add(item)
+        cleaned.append(item)
+    return cleaned
+
+
 def parse_args(argv: list[str]) -> CliOptions:
     """Parse argv into typed CLI options."""
     parser = argparse.ArgumentParser(
@@ -28,6 +43,11 @@ def parse_args(argv: list[str]) -> CliOptions:
         "--short",
         action="store_true",
         help="Короткий командный режим: выбрать и выполнить одну из предложенных команд.",
+    )
+    parser.add_argument(
+        "--tools",
+        default="",
+        help="Список инструментов через запятую, которым нужно отдать приоритет (например: docker,git,rg).",
     )
     parser.add_argument(
         "--dry-run",
@@ -65,6 +85,7 @@ def parse_args(argv: list[str]) -> CliOptions:
     return {
         "query": " ".join(query_parts).strip(),
         "short": bool(namespace.short),
+        "tools": _parse_tools_list(str(namespace.tools)),
         "dry_run": bool(namespace.dry_run),
         "llm_validate": bool(namespace.llm_validate),
         "tool_policy": _to_tool_policy(str(namespace.tool_policy)),

@@ -8,6 +8,7 @@ from searcher.config import BASELINE_TOOLS, DEV_TOOLS, MODERN_TOOLS
 from searcher.models.contracts import Capabilities
 
 _tools_cache: dict[str, bool] | None = None
+_CWD_ENTRIES_LIMIT = 60
 
 
 def reset_tools_cache() -> None:
@@ -38,6 +39,16 @@ def build_capabilities() -> Capabilities:
     modern_available = [name for name in MODERN_TOOLS if tools.get(name, False)]
     baseline_available = [name for name in BASELINE_TOOLS if tools.get(name, False)]
     dev_tools_available = [name for name in DEV_TOOLS if tools.get(name, False)]
+    cwd_path = os.getcwd()
+    cwd_entries: list[str] = []
+    cwd_entries_truncated = False
+    try:
+        cwd_entries = sorted(os.listdir(cwd_path))
+        if len(cwd_entries) > _CWD_ENTRIES_LIMIT:
+            cwd_entries = cwd_entries[:_CWD_ENTRIES_LIMIT]
+            cwd_entries_truncated = True
+    except OSError:
+        cwd_entries = []
     shell_raw = os.environ.get("SHELL", "").strip()
     shell_name = os.path.basename(shell_raw) if shell_raw else "unknown"
     return {
@@ -47,4 +58,7 @@ def build_capabilities() -> Capabilities:
         "dev_tools_available": dev_tools_available,
         "os_name": platform.system(),
         "shell_name": shell_name,
+        "cwd_path": cwd_path,
+        "cwd_entries": cwd_entries,
+        "cwd_entries_truncated": cwd_entries_truncated,
     }

@@ -24,12 +24,15 @@ def _build_chat_payload(
     reasoning: bool,
     capabilities: Capabilities,
     tool_policy: ToolPolicy,
+    preferred_tools: list[str] | None = None,
 ) -> dict[str, object]:
     """Build chat completion payload."""
     messages: list[ChatMessage] = [
         {
             "role": "system",
-            "content": build_system_prompt(reasoning, capabilities, tool_policy),
+            "content": build_system_prompt(
+                reasoning, capabilities, tool_policy, preferred_tools
+            ),
         },
         {"role": "user", "content": query},
     ]
@@ -128,9 +131,12 @@ def generate_answer(
     reasoning: bool,
     capabilities: Capabilities,
     tool_policy: ToolPolicy,
+    preferred_tools: list[str] | None = None,
 ) -> str:
     """Generate command or reasoning answer from chat completions."""
-    payload = _build_chat_payload(query, model_id, reasoning, capabilities, tool_policy)
+    payload = _build_chat_payload(
+        query, model_id, reasoning, capabilities, tool_policy, preferred_tools
+    )
     try:
         response = request_json(
             "POST", f"{BASE_URL}{CHAT_PATH}", payload=payload, timeout=30.0
@@ -155,6 +161,7 @@ def repair_command(
     capabilities: Capabilities,
     tool_policy: ToolPolicy,
     reason: str,
+    preferred_tools: list[str] | None = None,
 ) -> str:
     """Request repaired command constrained by capabilities and policy."""
     policy_instruction = (
@@ -168,7 +175,7 @@ def repair_command(
             "content": (
                 "Return exactly one macOS shell command in one line. "
                 "ASCII only. No explanations, no markdown.\n\n"
-                f"{format_capabilities_block(capabilities, tool_policy)}\n"
+                f"{format_capabilities_block(capabilities, tool_policy, preferred_tools)}\n"
                 f"{policy_instruction}"
             ),
         },
